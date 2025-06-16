@@ -81,16 +81,20 @@ export default async function HospitalAppointments() {
         .from("appointments")
         .update({
           approval_status: "approved",
+          status: "scheduled",
           updated_at: new Date().toISOString(),
         })
         .eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao aprovar consulta:", error)
+        return { success: false, error: error.message }
+      }
 
-      // Enviar notificação ao paciente
+      // Buscar dados da consulta para notificação
       const { data: appointment } = await supabase
         .from("appointments")
-        .select("patient_id, appointment_date")
+        .select("patient_id, appointment_date, specialty")
         .eq("id", id)
         .single()
 
@@ -98,15 +102,17 @@ export default async function HospitalAppointments() {
         await supabase.from("notifications").insert({
           user_id: appointment.patient_id,
           type: "appointment_reminder",
-          content: `Sua consulta para ${new Date(appointment.appointment_date).toLocaleDateString()} foi aprovada!`,
+          content: `Sua consulta de ${appointment.specialty || "consulta"} para ${new Date(appointment.appointment_date).toLocaleDateString("pt-BR")} foi aprovada!`,
           related_id: id,
           read: false,
         })
       }
 
       revalidatePath("/dashboard/hospital/appointments")
-    } catch (error) {
+      return { success: true, message: "Consulta aprovada com sucesso" }
+    } catch (error: any) {
       console.error("Erro ao aprovar consulta:", error)
+      return { success: false, error: error.message }
     }
   }
 
@@ -126,12 +132,15 @@ export default async function HospitalAppointments() {
         })
         .eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao rejeitar consulta:", error)
+        return { success: false, error: error.message }
+      }
 
-      // Enviar notificação ao paciente
+      // Buscar dados da consulta para notificação
       const { data: appointment } = await supabase
         .from("appointments")
-        .select("patient_id, appointment_date")
+        .select("patient_id, appointment_date, specialty")
         .eq("id", id)
         .single()
 
@@ -139,15 +148,17 @@ export default async function HospitalAppointments() {
         await supabase.from("notifications").insert({
           user_id: appointment.patient_id,
           type: "appointment_reminder",
-          content: `Sua solicitação de consulta para ${new Date(appointment.appointment_date).toLocaleDateString()} foi rejeitada.`,
+          content: `Sua solicitação de consulta de ${appointment.specialty || "consulta"} para ${new Date(appointment.appointment_date).toLocaleDateString("pt-BR")} foi rejeitada.`,
           related_id: id,
           read: false,
         })
       }
 
       revalidatePath("/dashboard/hospital/appointments")
-    } catch (error) {
+      return { success: true, message: "Consulta rejeitada" }
+    } catch (error: any) {
       console.error("Erro ao rejeitar consulta:", error)
+      return { success: false, error: error.message }
     }
   }
 

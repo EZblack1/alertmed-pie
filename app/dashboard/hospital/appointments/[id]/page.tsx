@@ -10,7 +10,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Separator } from "@/components/ui/separator"
 import PatientInfo from "../../../doctor/appointments/[id]/patient-info"
 import AppointmentHistory from "../../../doctor/appointments/[id]/appointment-history"
-import HospitalAppointmentActions from "./hospital-appointment-actions"
 
 export default async function HospitalAppointmentDetailsPage({ params }: { params: { id: string } }) {
   const supabase = createServerComponentClient({ cookies })
@@ -80,10 +79,12 @@ export default async function HospitalAppointmentDetailsPage({ params }: { param
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Detalhes da Consulta</h1>
           <p className="text-muted-foreground">
-            Consulta de {appointment.profiles.full_name} em {formattedDate}
+            Consulta de {appointment.profiles?.full_name || "Paciente"} em {formattedDate}
           </p>
         </div>
-        <Badge className={statusColors[appointment.status]}>{statusText[appointment.status]}</Badge>
+        <Badge className={statusColors[appointment.status] || "bg-gray-100 text-gray-800"}>
+          {statusText[appointment.status] || appointment.status}
+        </Badge>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -113,7 +114,7 @@ export default async function HospitalAppointmentDetailsPage({ params }: { param
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Especialidade</p>
-                      <p>{appointment.doctors?.specialty || "Não especificada"}</p>
+                      <p>{appointment.doctors?.specialty || appointment.specialty || "Não especificada"}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-muted-foreground">Médico</p>
@@ -153,7 +154,15 @@ export default async function HospitalAppointmentDetailsPage({ params }: { param
             </TabsContent>
 
             <TabsContent value="patient">
-              <PatientInfo patient={appointment.profiles} />
+              {appointment.profiles ? (
+                <PatientInfo patient={appointment.profiles} />
+              ) : (
+                <Card>
+                  <CardContent className="p-6">
+                    <p className="text-muted-foreground">Informações do paciente não disponíveis</p>
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="history">
@@ -163,46 +172,14 @@ export default async function HospitalAppointmentDetailsPage({ params }: { param
         </div>
 
         <div className="space-y-4">
-          <HospitalAppointmentActions appointment={appointment} />
-
           <Card>
             <CardHeader>
-              <CardTitle>Informações Rápidas</CardTitle>
+              <CardTitle>Ações Rápidas</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Status:</span>
-                <Badge className={statusColors[appointment.status]} variant="secondary">
-                  {statusText[appointment.status]}
-                </Badge>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Criado em:</span>
-                <span className="text-sm">
-                  {format(new Date(appointment.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                </span>
-              </div>
-              {appointment.updated_at && (
-                <div className="flex justify-between">
-                  <span className="text-sm text-muted-foreground">Atualizado em:</span>
-                  <span className="text-sm">
-                    {format(new Date(appointment.updated_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                  </span>
-                </div>
-              )}
-              <Separator />
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Paciente:</span>
-                <span className="text-sm font-medium">{appointment.profiles.full_name}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Telefone:</span>
-                <span className="text-sm">{appointment.profiles.phone || "Não informado"}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Email:</span>
-                <span className="text-sm">{appointment.profiles.email}</span>
-              </div>
+            <CardContent className="space-y-2">
+              <p className="text-sm text-muted-foreground">
+                Ações disponíveis para esta consulta serão implementadas em breve.
+              </p>
             </CardContent>
           </Card>
         </div>

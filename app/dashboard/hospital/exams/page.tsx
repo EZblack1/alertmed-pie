@@ -79,9 +79,12 @@ export default async function HospitalExams() {
         })
         .eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao aprovar exame:", error)
+        return { success: false, error: error.message }
+      }
 
-      // Enviar notificação ao paciente
+      // Buscar dados do exame para notificação
       const { data: exam } = await supabase.from("exams").select("patient_id, exam_type").eq("id", id).single()
 
       if (exam) {
@@ -95,8 +98,10 @@ export default async function HospitalExams() {
       }
 
       revalidatePath("/dashboard/hospital/exams")
-    } catch (error) {
+      return { success: true, message: "Exame aprovado com sucesso" }
+    } catch (error: any) {
       console.error("Erro ao aprovar exame:", error)
+      return { success: false, error: error.message }
     }
   }
 
@@ -116,9 +121,12 @@ export default async function HospitalExams() {
         })
         .eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao rejeitar exame:", error)
+        return { success: false, error: error.message }
+      }
 
-      // Enviar notificação ao paciente
+      // Buscar dados do exame para notificação
       const { data: exam } = await supabase.from("exams").select("patient_id, exam_type").eq("id", id).single()
 
       if (exam) {
@@ -132,8 +140,10 @@ export default async function HospitalExams() {
       }
 
       revalidatePath("/dashboard/hospital/exams")
-    } catch (error) {
+      return { success: true, message: "Exame rejeitado" }
+    } catch (error: any) {
       console.error("Erro ao rejeitar exame:", error)
+      return { success: false, error: error.message }
     }
   }
 

@@ -86,11 +86,33 @@ export default async function DoctorAppointments() {
         })
         .eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao concluir consulta:", error)
+        return { success: false, error: error.message }
+      }
+
+      // Buscar dados da consulta para notificação
+      const { data: appointment } = await supabase
+        .from("appointments")
+        .select("patient_id, specialty")
+        .eq("id", id)
+        .single()
+
+      if (appointment) {
+        await supabase.from("notifications").insert({
+          user_id: appointment.patient_id,
+          type: "appointment_reminder",
+          content: `Sua consulta de ${appointment.specialty || "consulta"} foi concluída com sucesso.`,
+          related_id: id,
+          read: false,
+        })
+      }
 
       revalidatePath("/dashboard/doctor/appointments")
-    } catch (error) {
+      return { success: true, message: "Consulta concluída com sucesso" }
+    } catch (error: any) {
       console.error("Erro ao concluir consulta:", error)
+      return { success: false, error: error.message }
     }
   }
 
@@ -109,12 +131,15 @@ export default async function DoctorAppointments() {
         })
         .eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao cancelar consulta:", error)
+        return { success: false, error: error.message }
+      }
 
-      // Enviar notificação ao paciente
+      // Buscar dados da consulta para notificação
       const { data: appointment } = await supabase
         .from("appointments")
-        .select("patient_id, appointment_date")
+        .select("patient_id, appointment_date, specialty")
         .eq("id", id)
         .single()
 
@@ -122,15 +147,17 @@ export default async function DoctorAppointments() {
         await supabase.from("notifications").insert({
           user_id: appointment.patient_id,
           type: "appointment_reminder",
-          content: `Sua consulta para ${new Date(appointment.appointment_date).toLocaleDateString()} foi cancelada pelo médico.`,
+          content: `Sua consulta de ${appointment.specialty || "consulta"} para ${new Date(appointment.appointment_date).toLocaleDateString("pt-BR")} foi cancelada pelo médico.`,
           related_id: id,
           read: false,
         })
       }
 
       revalidatePath("/dashboard/doctor/appointments")
-    } catch (error) {
+      return { success: true, message: "Consulta cancelada" }
+    } catch (error: any) {
       console.error("Erro ao cancelar consulta:", error)
+      return { success: false, error: error.message }
     }
   }
 

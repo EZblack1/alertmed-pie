@@ -1,7 +1,7 @@
 "use server"
 
 import { createClient } from "@/utils/supabase/server"
-import { sendAppointmentConfirmationEmail, logEmailSent } from "@/lib/email"
+import { sendAppointmentConfirmationEmail } from "@/lib/email"
 
 interface CreateAppointmentData {
   specialty: string
@@ -33,50 +33,15 @@ export async function createAppointment(data: CreateAppointmentData) {
 
     console.log("🔍 Iniciando criação de consulta para usuário:", userId)
 
-    // Buscar dados do usuário
-    const { data: profile, error: profileError } = await supabase.from("profiles").select("*").eq("id", userId).single()
-
-    // Se o perfil não existe, tentar criar um básico
-    let userProfile = profile
-    if (!profile) {
-      console.log("📝 Perfil não encontrado, tentando criar perfil básico...")
-
-      // Usar upsert para evitar conflitos de RLS
-      const { data: newProfile, error: createError } = await supabase
-        .from("profiles")
-        .upsert(
-          {
-            id: userId,
-            email: userEmail,
-            full_name: session.user.user_metadata?.full_name || userEmail.split("@")[0],
-            user_type: "patient",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "id",
-          },
-        )
-        .select()
-        .single()
-
-      if (createError) {
-        console.error("⚠️ Erro ao criar perfil:", createError)
-        // Se não conseguir criar o perfil, usar dados da sessão como fallback
-        userProfile = {
-          id: userId,
-          email: userEmail,
-          full_name: session.user.user_metadata?.full_name || userEmail.split("@")[0],
-          user_type: "patient",
-        }
-        console.log("📋 Usando dados da sessão como fallback")
-      } else {
-        console.log("✅ Perfil criado com sucesso")
-        userProfile = newProfile
-      }
-    } else {
-      console.log("✅ Perfil encontrado:", profile.full_name)
+    // Usar apenas dados da sessão, sem acessar profiles
+    const userProfile = {
+      id: userId,
+      email: userEmail,
+      full_name: session.user.user_metadata?.full_name || userEmail.split("@")[0],
+      user_type: "patient",
     }
+
+    console.log("✅ Usando dados da sessão:", userProfile.full_name)
 
     // Combinar data e hora
     const appointmentDateTime = new Date(`${data.appointmentDate}T${data.appointmentTime}:00`)
@@ -86,10 +51,10 @@ export async function createAppointment(data: CreateAppointmentData) {
     const appointmentData = {
       patient_id: userId,
       appointment_date: appointmentDateTime.toISOString(),
-      duration: 60, // 60 minutos por padrão
+      duration: 60,
       status: "scheduled",
       notes: data.notes || null,
-      location: "Clínica AlertMed", // Local padrão
+      location: "Clínica AlertMed",
       confirmation_sent: false,
       specialty: data.specialty,
       appointment_type: data.appointmentType,
@@ -109,8 +74,8 @@ export async function createAppointment(data: CreateAppointmentData) {
 
     // Preparar dados para o email
     const emailData = {
-      patientName: userProfile?.full_name || userEmail.split("@")[0] || "Paciente",
-      patientEmail: userProfile?.email || userEmail,
+      patientName: userProfile.full_name,
+      patientEmail: userProfile.email,
       appointmentDate: appointmentDateTime.toLocaleDateString("pt-BR", {
         weekday: "long",
         day: "numeric",
@@ -144,18 +109,6 @@ export async function createAppointment(data: CreateAppointmentData) {
         .eq("id", appointment.id)
     }
 
-    // Log do email
-    await logEmailSent(
-      userId,
-      "appointment_confirmation",
-      emailData.patientEmail,
-      "Confirmação de Agendamento - AlertMed",
-      `Consulta agendada para ${emailData.appointmentDate} às ${emailData.appointmentTime}`,
-      emailSent,
-      appointment.id,
-      emailSent ? undefined : "Erro ao enviar email",
-    )
-
     console.log("🎉 Processo concluído com sucesso!")
 
     return {
@@ -178,81 +131,115 @@ export async function createExamRequest(data: {
   preferredDate?: string
   notes?: string
 }) {
+  console.log("🔬 [INÍCIO] createExamRequest - Nova abordagem independente")
+  console.log("📋 [DATA] Dados recebidos:", data)
+
   const supabase = createClient()
 
   try {
+    // Verificar autenticação
     const {
       data: { session },
     } = await supabase.auth.getSession()
 
     if (!session) {
+      console.error("❌ [AUTH] Usuário não autenticado")
       throw new Error("Usuário não autenticado")
     }
 
     const userId = session.user.id
     const userEmail = session.user.email
+    const userName = session.user.user_metadata?.full_name || userEmail?.split("@")[0] || "Usuário"
+
+    console.log("✅ [AUTH] Usuário autenticado:", { userId, userEmail, userName })
 
     if (!userEmail) {
+      console.error("❌ [AUTH] Email do usuário não encontrado")
       throw new Error("Email do usuário não encontrado")
     }
 
-    console.log("🔬 Iniciando solicitação de exame para usuário:", userId)
-
-    // Verificar se o perfil existe, se não, tentar criar um básico
-    const { data: profile } = await supabase.from("profiles").select("*").eq("id", userId).single()
-
-    if (!profile) {
-      console.log("📝 Perfil não encontrado para exame, tentando criar perfil básico...")
-
-      // Usar upsert para evitar conflitos de RLS
-      await supabase
-        .from("profiles")
-        .upsert(
-          {
-            id: userId,
-            email: userEmail,
-            full_name: session.user.user_metadata?.full_name || userEmail.split("@")[0],
-            user_type: "patient",
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          },
-          {
-            onConflict: "id",
-          },
-        )
-        .select()
-        .single()
-    }
-
-    // Preparar dados do exame
+    // Preparar dados do exame para a tabela independente
     const examData = {
       patient_id: userId,
+      patient_email: userEmail,
+      patient_name: userName,
       exam_type: data.examType,
       result_available: false,
-      notes: data.notes || null,
       status: "requested",
       urgency: data.urgency || "media",
-      preferred_date: data.preferredDate || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
     }
 
-    console.log("📋 Dados do exame a serem inseridos:", examData)
-
-    // Criar solicitação de exame no banco de dados
-    const { data: exam, error } = await supabase.from("exams").insert(examData).select().single()
-
-    if (error) {
-      console.error("❌ Erro ao inserir exame:", error)
-      throw error
+    // Adicionar campos opcionais
+    if (data.notes) {
+      examData.notes = data.notes
     }
 
-    console.log("✅ Exame solicitado com sucesso:", exam.id)
+    if (data.preferredDate) {
+      examData.preferred_date = data.preferredDate
+    }
+
+    console.log("📋 [EXAM] Dados do exame preparados:", examData)
+
+    // Inserir na tabela independente de exames
+    console.log("🔄 [INSERT] Inserindo na tabela independente 'exams'...")
+
+    const { data: exam, error: examError } = await supabase.from("exams").insert(examData).select().single()
+
+    if (examError) {
+      console.error("❌ [ERROR] Erro ao inserir exame:", {
+        message: examError.message,
+        details: examError.details,
+        hint: examError.hint,
+        code: examError.code,
+      })
+      throw new Error(`Erro ao inserir exame: ${examError.message}`)
+    }
+
+    console.log("✅ [SUCCESS] Exame inserido com sucesso:", exam)
+
+    // Criar notificação na tabela independente
+    try {
+      console.log("📢 [NOTIFICATION] Criando notificação independente...")
+
+      const notificationData = {
+        user_id: userId,
+        user_email: userEmail,
+        type: "exam_request",
+        title: "Nova Solicitação de Exame",
+        message: `Solicitação de ${data.examType} - Urgência: ${data.urgency || "média"}`,
+        exam_id: exam.id,
+        read: false,
+        priority: "normal",
+        created_at: new Date().toISOString(),
+      }
+
+      const { error: notificationError } = await supabase.from("exam_notifications").insert(notificationData)
+
+      if (notificationError) {
+        console.log("⚠️ [WARNING] Erro ao criar notificação (continuando):", notificationError)
+      } else {
+        console.log("✅ [SUCCESS] Notificação criada com sucesso")
+      }
+    } catch (notificationError) {
+      console.log("⚠️ [WARNING] Exceção ao criar notificação (continuando):", notificationError)
+    }
+
+    console.log("🎉 [FINAL] Processo concluído com sucesso!")
 
     return {
       success: true,
       exam,
+      message: "Solicitação de exame enviada com sucesso!",
     }
   } catch (error: any) {
-    console.error("❌ Erro ao solicitar exame:", error)
+    console.error("❌ [FATAL] Erro completo:", {
+      message: error.message,
+      stack: error.stack,
+      name: error.name,
+    })
+
     return {
       success: false,
       error: error.message || "Erro ao solicitar exame",

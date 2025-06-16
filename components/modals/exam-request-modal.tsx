@@ -63,20 +63,42 @@ export function ExamRequestModal({ children, onSuccess }: ExamRequestModalProps)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    console.log("🚀 Iniciando handleSubmit no modal")
+
+    if (!examType) {
+      console.log("❌ Tipo de exame não selecionado")
+      toast({
+        title: "Erro de validação",
+        description: "Por favor, selecione o tipo de exame.",
+        variant: "destructive",
+      })
+      return
+    }
+
     setLoading(true)
 
     try {
-      const result = await createExamRequest({
+      const requestData = {
         examType,
         urgency: urgency || undefined,
         preferredDate: preferredDate || undefined,
         notes: notes || undefined,
-      })
+      }
+
+      console.log("📋 Dados da solicitação:", requestData)
+      console.log("🔄 Chamando createExamRequest...")
+
+      const result = await createExamRequest(requestData)
+
+      console.log("📊 Resultado recebido:", result)
 
       if (result.success) {
+        console.log("✅ Sucesso! Exibindo toast de sucesso")
+
         toast({
           title: "Solicitação enviada com sucesso! 🎉",
-          description: "Sua solicitação de exame foi recebida e está sendo processada.",
+          description: result.message || "Sua solicitação de exame foi recebida e está sendo processada.",
         })
 
         // Reset form
@@ -88,18 +110,24 @@ export function ExamRequestModal({ children, onSuccess }: ExamRequestModalProps)
 
         // Callback para atualizar a página
         if (onSuccess) {
+          console.log("🔄 Chamando callback onSuccess")
           onSuccess()
         }
       } else {
-        throw new Error(result.error)
+        console.error("❌ Erro retornado pela server action:", result.error)
+        throw new Error(result.error || "Erro desconhecido")
       }
     } catch (error: any) {
+      console.error("❌ Erro capturado no modal:", error)
+      console.error("❌ Stack trace:", error.stack)
+
       toast({
         title: "Erro ao enviar solicitação",
         description: error.message || "Ocorreu um erro ao enviar sua solicitação. Tente novamente.",
         variant: "destructive",
       })
     } finally {
+      console.log("🏁 Finalizando handleSubmit")
       setLoading(false)
     }
   }
@@ -177,7 +205,7 @@ export function ExamRequestModal({ children, onSuccess }: ExamRequestModalProps)
           </div>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
               Cancelar
             </Button>
             <Button type="submit" disabled={loading || !examType}>

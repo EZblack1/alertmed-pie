@@ -80,9 +80,12 @@ export default async function DoctorExams() {
         })
         .eq("id", id)
 
-      if (error) throw error
+      if (error) {
+        console.error("Erro ao adicionar resultado:", error)
+        return { success: false, error: error.message }
+      }
 
-      // Enviar notificação ao paciente
+      // Buscar dados do exame para notificação
       const { data: exam } = await supabase.from("exams").select("patient_id, exam_type").eq("id", id).single()
 
       if (exam) {
@@ -96,8 +99,10 @@ export default async function DoctorExams() {
       }
 
       revalidatePath("/dashboard/doctor/exams")
-    } catch (error) {
+      return { success: true, message: "Resultado adicionado com sucesso" }
+    } catch (error: any) {
       console.error("Erro ao adicionar resultado:", error)
+      return { success: false, error: error.message }
     }
   }
 
