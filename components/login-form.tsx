@@ -3,266 +3,402 @@
 import type React from "react"
 
 import { useState } from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/utils/supabase/client"
-import { Eye, EyeOff, Loader2 } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle, User, Building2, Stethoscope, Mail, Lock, Eye, EyeOff } from "lucide-react"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+
+// Substituir a importação do createClientComponentClient
+import { createClient } from "@/utils/supabase/client"
 
 export function LoginForm() {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const [showPassword, setShowPassword] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  // Login form state
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+  const [userType, setUserType] = useState<"patient" | "doctor" | "hospital">("patient")
+  const [activeTab, setActiveTab] = useState("patient")
 
-  // Register form state
-  const [registerEmail, setRegisterEmail] = useState("")
-  const [registerPassword, setRegisterPassword] = useState("")
-  const [fullName, setFullName] = useState("")
-  const [phone, setPhone] = useState("")
+  const router = useRouter()
+  // Remover esta linha:
+  // const supabase = createClientComponentClient()
 
+  // E substituir por:
   const supabase = createClient()
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    setIsLoading(true)
+    setLoading(true)
     setError(null)
 
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-      })
-
-      if (error) {
-        throw error
-      }
-
-      router.push("/dashboard")
-      router.refresh()
-    } catch (error: any) {
-      setError(error.message || "Falha ao fazer login. Tente novamente.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const { data, error } = await supabase.auth.signUp({
-        email: registerEmail,
-        password: registerPassword,
         options: {
           data: {
-            full_name: fullName,
-            phone: phone,
+            user_type: activeTab === "professional" ? userType : "patient",
           },
         },
       })
 
       if (error) {
-        throw error
+        setError(error.message)
+        return
       }
 
-      // Mostrar mensagem de sucesso ou redirecionar
-      alert("Cadastro realizado com sucesso! Verifique seu email para confirmar sua conta.")
-    } catch (error: any) {
-      setError(error.message || "Falha ao criar conta. Tente novamente.")
+      if (data?.user) {
+        // Verificar o tipo de usuário para redirecionamento
+        if (activeTab === "professional") {
+          if (userType === "doctor") {
+            router.push("/dashboard/doctor")
+          } else if (userType === "hospital") {
+            router.push("/dashboard/hospital")
+          } else {
+            router.push("/dashboard")
+          }
+        } else {
+          router.push("/dashboard")
+        }
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Erro ao fazer login:", error)
+      setError("Ocorreu um erro ao fazer login. Tente novamente.")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
+    }
+  }
+
+  const handleSignUp = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setLoading(true)
+    setError(null)
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          data: {
+            user_type: activeTab === "professional" ? userType : "patient",
+          },
+        },
+      })
+
+      if (error) {
+        setError(error.message)
+        return
+      }
+
+      setError("Verifique seu email para confirmar seu cadastro.")
+    } catch (error) {
+      console.error("Erro ao criar conta:", error)
+      setError("Ocorreu um erro ao criar sua conta. Tente novamente.")
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <Card className="w-full max-w-md shadow-xl">
-      <Tabs defaultValue="login">
-        <CardHeader>
-          <div className="flex items-center justify-center mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-10 w-10 text-blue-600 dark:text-blue-400"
-            >
-              <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
-            </svg>
-            <h1 className="text-2xl font-bold ml-2 text-blue-600 dark:text-blue-400">AlertMed</h1>
-          </div>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">Login</TabsTrigger>
-            <TabsTrigger value="register">Cadastro</TabsTrigger>
-          </TabsList>
-          {error && (
-            <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 p-3 rounded-md text-sm mt-4">
-              {error}
+    <Tabs defaultValue="patient" className="w-full max-w-md" onValueChange={setActiveTab}>
+      <TabsList className="grid w-full grid-cols-2">
+        <TabsTrigger value="patient" className="flex items-center gap-2">
+          <User size={16} />
+          <span>Paciente</span>
+        </TabsTrigger>
+        <TabsTrigger value="professional" className="flex items-center gap-2">
+          <Stethoscope size={16} />
+          <span>Profissional</span>
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="patient">
+        <Card>
+          <CardHeader>
+            <CardTitle>Área do Paciente</CardTitle>
+            <CardDescription>Acesse sua conta para gerenciar consultas, exames e medicamentos.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="login">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="register">Cadastro</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="login">
+                <form onSubmit={handleSignIn} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Senha</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Entrando..." : "Entrar"}
+                  </Button>
+                </form>
+              </TabsContent>
+
+              <TabsContent value="register">
+                <form onSubmit={handleSignUp} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="register-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="register-email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="register-password">Senha</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="register-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <Alert variant={error.includes("Verifique seu email") ? "default" : "destructive"}>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Cadastrando..." : "Cadastrar"}
+                  </Button>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+          <CardFooter className="flex justify-center text-sm text-gray-500">Acesse para gerenciar sua saúde</CardFooter>
+        </Card>
+      </TabsContent>
+
+      <TabsContent value="professional">
+        <Card>
+          <CardHeader>
+            <CardTitle>Área Profissional</CardTitle>
+            <CardDescription>Acesso para médicos e instituições de saúde.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="mb-4">
+              <Label className="mb-2 block">Tipo de acesso</Label>
+              <RadioGroup
+                value={userType}
+                onValueChange={(value) => setUserType(value as "doctor" | "hospital")}
+                className="flex space-x-4"
+              >
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="doctor" id="doctor" />
+                  <Label htmlFor="doctor" className="flex items-center gap-1">
+                    <Stethoscope size={16} />
+                    <span>Médico</span>
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="hospital" id="hospital" />
+                  <Label htmlFor="hospital" className="flex items-center gap-1">
+                    <Building2 size={16} />
+                    <span>Hospital/Clínica</span>
+                  </Label>
+                </div>
+              </RadioGroup>
             </div>
-          )}
-        </CardHeader>
 
-        <CardContent className="space-y-4">
-          <TabsContent value="login">
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Senha</Label>
-                  <Link href="/forgot-password" className="text-sm text-blue-600 dark:text-blue-400 hover:underline">
-                    Esqueceu a senha?
-                  </Link>
-                </div>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <span className="sr-only">{showPassword ? "Esconder senha" : "Mostrar senha"}</span>
+            <Tabs defaultValue="login">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="login">Login</TabsTrigger>
+                <TabsTrigger value="register">Cadastro</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="login">
+                <form onSubmit={handleSignIn} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pro-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="pro-email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="pro-password">Senha</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="pro-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <Alert variant="destructive">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Entrando..." : "Entrar"}
                   </Button>
-                </div>
-              </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Entrando...
-                  </>
-                ) : (
-                  "Entrar"
-                )}
-              </Button>
-            </form>
-          </TabsContent>
+                </form>
+              </TabsContent>
 
-          <TabsContent value="register">
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="full-name">Nome Completo</Label>
-                <Input
-                  id="full-name"
-                  placeholder="João Silva"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="register-email">Email</Label>
-                <Input
-                  id="register-email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={registerEmail}
-                  onChange={(e) => setRegisterEmail(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="phone">Telefone</Label>
-                <Input
-                  id="phone"
-                  placeholder="(11) 98765-4321"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="register-password">Senha</Label>
-                <div className="relative">
-                  <Input
-                    id="register-password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="••••••••"
-                    value={registerPassword}
-                    onChange={(e) => setRegisterPassword(e.target.value)}
-                    required
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4 text-muted-foreground" />
-                    ) : (
-                      <Eye className="h-4 w-4 text-muted-foreground" />
-                    )}
-                    <span className="sr-only">{showPassword ? "Esconder senha" : "Mostrar senha"}</span>
+              <TabsContent value="register">
+                <form onSubmit={handleSignUp} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="pro-register-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="pro-register-email"
+                        type="email"
+                        placeholder="seu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="pro-register-password">Senha</Label>
+                    <div className="relative">
+                      <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                      <Input
+                        id="pro-register-password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pl-10 pr-10"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <Alert variant={error.includes("Verifique seu email") ? "default" : "destructive"}>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  )}
+
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? "Cadastrando..." : "Cadastrar"}
                   </Button>
-                </div>
-              </div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Cadastrando...
-                  </>
-                ) : (
-                  "Cadastrar"
-                )}
-              </Button>
-            </form>
-          </TabsContent>
-        </CardContent>
-
-        <CardFooter className="flex justify-center">
-          <p className="text-xs text-center text-muted-foreground">
-            Ao continuar, você concorda com nossos{" "}
-            <Link href="/terms" className="underline underline-offset-4 hover:text-primary">
-              Termos de Serviço
-            </Link>{" "}
-            e{" "}
-            <Link href="/privacy" className="underline underline-offset-4 hover:text-primary">
-              Política de Privacidade
-            </Link>
-            .
-          </p>
-        </CardFooter>
-      </Tabs>
-    </Card>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+          <CardFooter className="flex justify-center text-sm text-gray-500">
+            {userType === "doctor"
+              ? "Acesso exclusivo para médicos cadastrados"
+              : "Acesso exclusivo para instituições de saúde"}
+          </CardFooter>
+        </Card>
+      </TabsContent>
+    </Tabs>
   )
 }
